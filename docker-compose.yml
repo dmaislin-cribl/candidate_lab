@@ -1,0 +1,110 @@
+version: "3.9"
+
+services:
+
+  mariadb:
+    image: docker.io/bitnami/mariadb:11.1
+    container_name: mariadb
+    environment:
+      - MARIADB_USER=bn_opencart
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+      - MARIADB_DATABASE=bitnami_opencart
+      - ALLOW_EMPTY_PASSWORD=no
+    networks:
+      cribl_lab:
+        ipv4_address: 172.16.1.2
+
+  opencart:
+    image: docker.io/bitnami/opencart:4
+    container_name: opencart
+    ports:
+      - '80:8080'
+      - '443:8443'
+    environment:
+      - OPENCART_HOST=localhost
+      - OPENCART_DATABASE_HOST=mariadb
+      - OPENCART_DATABASE_PORT_NUMBER=3306
+      - OPENCART_DATABASE_USER=bn_opencart
+      - OPENCART_DATABASE_PASSWORD=${OPENCART_DATABASE_PASSWORD}
+      - OPENCART_DATABASE_NAME=bitnami_opencart
+      - OPENCART_USERNAME=admin
+      - OPENCART_PASSWORD=${OPENCART_PASSWORD}
+      - ALLOW_EMPTY_PASSWORD=no
+    depends_on:
+      - mariadb
+    logging:
+      driver: syslog
+      options:
+        syslog-address: "udp://172.16.1.6:9514"
+    networks:
+      cribl_lab:
+        ipv4_address: 172.16.1.3
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - '9001:9001'
+      - '9002:9002'
+    environment:
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - CONSOLE_ACCESS_KEY=${CONSOLE_ACCESS_KEY}
+      - CONSOLE_SECRET_KEY=${CONSOLE_SECRET_KEY}
+    command: server --address ":9001" --console-address ":9002" /data
+    volumes:
+      - "$PWD/minio:/data:rw,nosuid,nodev,relatime"
+#      - /:/hostfs:ro 
+    networks:
+      cribl_lab:
+        ipv4_address: 172.16.1.4
+
+  edge:
+    image: ubuntu:latest
+    container_name: edge
+    command: ["/bin/sh", "-c", "apt-get update && apt-get install -y curl bash vim apt-utils libterm-readline-gnu-perl && tail -f /dev/null"]
+    tty: true
+    environment:
+      - CRIBL_VOLUME_DIR=/opt/cribl
+    volumes:
+      - "$PWD/edge:/opt/cribl:rw,nosuid,nodev,relatime"
+#      - /:/hostfs:ro 
+      - edge_dockersock:/var/run/docker.sock
+    networks:
+      cribl_lab:
+        ipv4_address: 172.16.1.6
+    ports:
+      - "9514:9514"
+      - "9514:9514/udp"
+      - "9420:9420"
+
+  worker:
+    image: ubuntu:latest
+    container_name: worker
+    command: ["/bin/sh", "-c", "apt-get update && apt-get install -y curl bash vim apt-utils libterm-readline-gnu-perl && tail -f /dev/null"]
+    tty: true
+    environment:
+      - CRIBL_VOLUME_DIR=/opt/cribl
+    volumes:
+      - "$PWD/worker:/opt/cribl:rw,nosuid,nodev,relatime"
+#      - /:/hostfs:ro 
+    networks:
+      cribl_lab:
+        ipv4_address: 172.16.1.7
+    ports:
+      - "19000:9000"
+
+networks:
+  cribl_lab:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.16.1.0/24
+
+volumes:
+  minio:
+  worker:
+  edge:
+  edge_dockersock:
