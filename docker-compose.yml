@@ -1,0 +1,153 @@
+version: "3.9"
+
+services:
+
+  edge:
+    image: ubuntu:latest
+    container_name: edge
+    expose:
+      - 9514
+    command: ["/bin/sh", "-c", "apt-get update && apt-get install -y curl bash vim apt-utils libterm-readline-gnu-perl && tail -f /dev/null"]
+    tty: true
+    environment:
+      - CRIBL_VOLUME_DIR=/opt/cribl
+    volumes:
+      - edge:/opt/cribl
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "traefik.enable=true"
+      - "traefik.udp.routers.Edge.entrypoints=edge"
+      - "traefik.udp.services.Edge.loadbalancer.server.port=9514"
+      - "traefik.udp.routers.Edge.service=Edge"
+    networks:
+      - criblcandidatenetwork
+
+  worker:
+    image: ubuntu:latest
+    container_name: worker
+    command: ["/bin/sh", "-c", "apt-get update && apt-get install -y curl bash vim apt-utils libterm-readline-gnu-perl && tail -f /dev/null"]
+    tty: true
+    environment:
+      - CRIBL_VOLUME_DIR=/opt/cribl
+    volumes:
+      - worker:/opt/cribl
+    expose:
+      - 9000
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.Worker.rule=ClientIP(`0.0.0.0/0`)"
+      - "traefik.http.routers.Worker.entrypoints=worker"
+    networks:
+      - criblcandidatenetwork
+
+  mariadb:
+    image: docker.io/bitnami/mariadb:11.1
+    container_name: mariadb
+    expose:
+      - 3306
+    environment:
+      - MARIADB_USER=bn_opencart
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+      - MARIADB_DATABASE=bitnami_opencart
+      - ALLOW_EMPTY_PASSWORD=no
+      - NO_COLOR=true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.tcp.routers.MariaDB.rule=ClientIP(`0.0.0.0/0`)"
+      - "traefik.tcp.routers.MariaDB.entrypoints=mariadb"
+    networks:
+      - criblcandidatenetwork
+
+  opencart:
+    image: docker.io/bitnami/opencart:4
+    container_name: opencart
+    expose:
+      - 8080 
+    environment:
+      - OPENCART_HOST=localhost
+      - OPENCART_DATABASE_HOST=mariadb
+      - OPENCART_DATABASE_PORT_NUMBER=3306
+      - OPENCART_DATABASE_USER=bn_opencart
+      - OPENCART_DATABASE_PASSWORD=${OPENCART_DATABASE_PASSWORD}
+      - OPENCART_DATABASE_NAME=bitnami_opencart
+      - OPENCART_USERNAME=admin
+      - OPENCART_PASSWORD=${OPENCART_PASSWORD}
+      - ALLOW_EMPTY_PASSWORD=no
+    depends_on:
+      - mariadb
+    logging:
+       driver: syslog
+       options:
+         syslog-address: "udp://127.0.0.1:9514"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.OpenChart.rule=ClientIP(`0.0.0.0/0`)"
+      - "traefik.http.routers.OpenChart.entrypoints=opencart"
+    networks:
+      - criblcandidatenetwork
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    expose:
+      - 9001
+      - 9002
+    environment:
+      - CONSOLE_ACCESS_KEY=${CONSOLE_ACCESS_KEY}
+      - CONSOLE_SECRET_KEY=${CONSOLE_SECRET_KEY}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    command: server --address ":9001" --console-address ":9002" /data
+    volumes:
+      - minio:/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.MinIOServer.rule=ClientIP(`0.0.0.0/0`)"
+      - "traefik.http.routers.MinIOServer.entrypoints=minioserver"
+      - "traefik.http.routers.MinIOServer.service=MinIOServer"
+      - "traefik.http.services.MinIOServer.loadbalancer.server.port=9001"
+      - "traefik.http.routers.MinIOConsole.rule=ClientIP(`0.0.0.0/0`)"
+      - "traefik.http.routers.MinIOConsole.entrypoints=minioconsole"
+      - "traefik.http.routers.MinIOConsole.service=MinIOConsole"
+      - "traefik.http.services.MinIOConsole.loadbalancer.server.port=9002"
+    networks:
+      - criblcandidatenetwork
+
+  traefik:
+    hostname: traefik
+    container_name: traefik
+    image: traefik:latest
+    restart: always
+    command:
+      - "--api.insecure=true"
+      - "--accesslog=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.opencart.address=:80/tcp"
+      - "--entrypoints.mariadb.address=:3306/tcp"
+      - "--entrypoints.worker.address=:9000/tcp"
+      - "--entrypoints.minioserver.address=:9001/tcp"
+      - "--entrypoints.minioconsole.address=:9002/tcp"
+      - "--entrypoints.edge.address=:9514/udp"
+    ports:
+      - "8080:8080"         # Traefik Dashboard
+      - "9000:9000/tcp"     # Worker
+      - "9514:9514/udp"     # Edge
+      - "80:80/tcp"         # OpenCart UI
+      - "3306:3306/tcp"     # MariaDB
+      - "9001:9001"         # MinIO Server
+      - "9002:9002"         # MinIO Console
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - criblcandidatenetwork
+
+networks:
+  criblcandidatenetwork:
+    name: cribl_candidate_network
+
+volumes:
+  edge:
+  worker:
+  minio:

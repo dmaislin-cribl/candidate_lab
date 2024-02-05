@@ -1,0 +1,9 @@
+.DS_Store
+.env
+*.swp
+.cache
+edge
+minio
+redis
+worker
+archive
