@@ -63,7 +63,7 @@ services:
     image: docker.io/bitnami/opencart:4
     container_name: opencart
     expose:
-      - 8080 
+      - 8081 
     environment:
       - OPENCART_HOST=localhost
       - OPENCART_DATABASE_HOST=mariadb
@@ -74,6 +74,7 @@ services:
       - OPENCART_USERNAME=admin
       - OPENCART_PASSWORD=${OPENCART_PASSWORD}
       - ALLOW_EMPTY_PASSWORD=no
+      - OPENCART_EXTERNAL_HTTP_PORT_NUMBER=8081
     depends_on:
       - mariadb
     logging:
@@ -82,8 +83,8 @@ services:
          syslog-address: "udp://127.0.0.1:9514"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.OpenChart.rule=ClientIP(`0.0.0.0/0`)"
-      - "traefik.http.routers.OpenChart.entrypoints=opencart"
+      - "traefik.http.routers.OpenCart.rule=ClientIP(`0.0.0.0/0`)"
+      - "traefik.http.routers.OpenCart.entrypoints=opencart"
     networks:
       - criblcandidatenetwork
 
@@ -124,7 +125,7 @@ services:
       - "--accesslog=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.opencart.address=:80/tcp"
+      - "--entrypoints.opencart.address=:8081/tcp"
       - "--entrypoints.mariadb.address=:3306/tcp"
       - "--entrypoints.worker.address=:9000/tcp"
       - "--entrypoints.minioserver.address=:9001/tcp"
@@ -134,7 +135,7 @@ services:
       - "8080:8080"         # Traefik Dashboard
       - "9000:9000/tcp"     # Worker
       - "9514:9514/udp"     # Edge
-      - "80:80/tcp"         # OpenCart UI
+      - "8081:8081/tcp"         # OpenCart UI
       - "3306:3306/tcp"     # MariaDB
       - "9001:9001"         # MinIO Server
       - "9002:9002"         # MinIO Console
