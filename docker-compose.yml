@@ -135,7 +135,7 @@ services:
       - "8080:8080"         # Traefik Dashboard
       - "9000:9000/tcp"     # Worker
       - "9514:9514/udp"     # Edge
-      - "8081:8081/tcp"         # OpenCart UI
+      - "8081:8081/tcp"     # OpenCart UI
       - "3306:3306/tcp"     # MariaDB
       - "9001:9001"         # MinIO Server
       - "9002:9002"         # MinIO Console
