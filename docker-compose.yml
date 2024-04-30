@@ -5,7 +5,7 @@ services:
     container_name: edge
     expose:
       - 9514
-    command: ["/bin/sh", "-c", "apt-get update && apt-get install -y curl bash vim apt-utils libterm-readline-gnu-perl && tail -f /dev/null"]
+    command: ["/bin/sh", "-c", "apt-get update && apt-get install -y curl && tail -f /dev/null"]
     tty: true
     environment:
       - CRIBL_VOLUME_DIR=/opt/cribl
@@ -23,7 +23,7 @@ services:
   worker:
     image: ubuntu:latest
     container_name: worker
-    command: ["/bin/sh", "-c", "apt-get update && apt-get install -y curl bash vim apt-utils libterm-readline-gnu-perl && tail -f /dev/null"]
+    command: ["/bin/sh", "-c", "apt-get update && apt-get install -y curl && tail -f /dev/null"]
     tty: true
     environment:
       - CRIBL_VOLUME_DIR=/opt/cribl
