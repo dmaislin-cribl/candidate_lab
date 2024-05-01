@@ -112,7 +112,18 @@ services:
       - "traefik.http.services.MinIOConsole.loadbalancer.server.port=9002"
     networks:
       - criblcandidatenetwork
-
+      
+  podinfo:
+    image: stefanprodan/podinfo:5.0.0
+    ports:
+      - "9898:9898"
+    logging:
+       driver: syslog
+       options:
+         syslog-address: "udp://127.0.0.1:9514"
+    networks:
+      - criblcandidatenetwork
+      
   traefik:
     hostname: traefik
     container_name: traefik
