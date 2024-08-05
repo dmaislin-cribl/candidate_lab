@@ -58,7 +58,7 @@ services:
       - criblcandidatenetwork
 
   opencart:
-    image: docker.io/bitnami/opencart:4
+    image: docker.io/bitnami/opencart:latest
     container_name: opencart
     expose:
       - 8081 
@@ -114,7 +114,7 @@ services:
       - criblcandidatenetwork
       
   podinfo:
-    image: stefanprodan/podinfo:5.0.0
+    image: stefanprodan/podinfo:latest
     container_name: podinfo
     ports:
       - "9898:9898"
