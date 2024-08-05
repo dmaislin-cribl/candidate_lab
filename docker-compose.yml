@@ -39,7 +39,7 @@ services:
       - criblcandidatenetwork
 
   mariadb:
-    image: docker.io/bitnami/mariadb:11.1
+    image: docker.io/bitnami/mariadb:latest
     container_name: mariadb
     expose:
       - 3306
