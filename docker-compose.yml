@@ -3,40 +3,15 @@ services:
   edge:
     image: ubuntu:latest
     container_name: edge
-    expose:
-      - 9514
-    command: ["/bin/sh", "-c", "apt-get update && apt-get install -y curl && tail -f /dev/null"]
+    network_mode: host
+    command: ["/bin/bash", "-c", "apt-get update && apt-get install -y curl && exec tail -f /dev/null"]
     tty: true
+    init: true
     environment:
       - CRIBL_VOLUME_DIR=/opt/cribl
     volumes:
-      - edge:/opt/cribl
       - /var/run/docker.sock:/var/run/docker.sock
-    labels:
-      - "traefik.enable=true"
-      - "traefik.udp.routers.Edge.entrypoints=edge"
-      - "traefik.udp.services.Edge.loadbalancer.server.port=9514"
-      - "traefik.udp.routers.Edge.service=Edge"
-    networks:
-      - criblcandidatenetwork
-
-  worker:
-    image: ubuntu:latest
-    container_name: worker
-    command: ["/bin/sh", "-c", "apt-get update && apt-get install -y curl && tail -f /dev/null"]
-    tty: true
-    environment:
-      - CRIBL_VOLUME_DIR=/opt/cribl
-    volumes:
-      - worker:/opt/cribl
-    expose:
-      - 9000
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.Worker.rule=ClientIP(`0.0.0.0/0`)"
-      - "traefik.http.routers.Worker.entrypoints=worker"
-    networks:
-      - criblcandidatenetwork
+      - edge:/opt/cribl
 
   mariadb:
     image: docker.io/bitnami/mariadb:latest
@@ -44,121 +19,134 @@ services:
     expose:
       - 3306
     environment:
-      - MARIADB_USER=bn_opencart
+      - MARIADB_USER=bn_wordpress
       - MARIADB_PASSWORD=${MARIADB_PASSWORD}
       - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
-      - MARIADB_DATABASE=bitnami_opencart
+      - MARIADB_DATABASE=bitnami_wordpress
       - ALLOW_EMPTY_PASSWORD=no
       - NO_COLOR=true
-    labels:
-      - "traefik.enable=true"
-      - "traefik.tcp.routers.MariaDB.rule=ClientIP(`0.0.0.0/0`)"
-      - "traefik.tcp.routers.MariaDB.entrypoints=mariadb"
+    volumes:
+      - mariadb_data:/bitnami/mariadb
     networks:
       - criblcandidatenetwork
+    depends_on:
+      - edge
+    restart: unless-stopped
+    logging:
+      driver: syslog
+      options:
+        syslog-address: "udp://127.0.0.1:9514"
+        syslog-facility: "local0"
+        tag: "mariadb"
 
-  opencart:
-    image: docker.io/bitnami/opencart:latest
-    container_name: opencart
-    expose:
-      - 8081 
+  wordpress:
+    image: wordpress:latest
+    container_name: wordpress
+    ports:
+      - "8081:80"
     environment:
-      - OPENCART_HOST=localhost
-      - OPENCART_DATABASE_HOST=mariadb
-      - OPENCART_DATABASE_PORT_NUMBER=3306
-      - OPENCART_DATABASE_USER=bn_opencart
-      - OPENCART_DATABASE_PASSWORD=${OPENCART_DATABASE_PASSWORD}
-      - OPENCART_DATABASE_NAME=bitnami_opencart
-      - OPENCART_USERNAME=admin
-      - OPENCART_PASSWORD=${OPENCART_PASSWORD}
-      - ALLOW_EMPTY_PASSWORD=no
-      - OPENCART_EXTERNAL_HTTP_PORT_NUMBER=8081
+      - WORDPRESS_DB_HOST=mariadb:3306
+      - WORDPRESS_DB_NAME=bitnami_wordpress
+      - WORDPRESS_DB_USER=bn_wordpress
+      - WORDPRESS_DB_PASSWORD=${MARIADB_PASSWORD}
+      - WORDPRESS_DEBUG=1
+      - WORDPRESS_TABLE_PREFIX=wp_
+      - WORDPRESS_CONFIG_EXTRA=define('WP_SITEURL', 'http://localhost:8081'); define('WP_HOME', 'http://localhost:8081');
+      - WORDPRESS_ADMIN_USER=${WORDPRESS_ADMIN_USER}
+      - WORDPRESS_ADMIN_PASSWORD=${WORDPRESS_ADMIN_PASSWORD}
+      - WORDPRESS_ADMIN_EMAIL=${WORDPRESS_ADMIN_EMAIL}
+    volumes:
+      - wordpress_data:/var/www/html
     depends_on:
       - mariadb
-    logging:
-       driver: syslog
-       options:
-         syslog-address: "udp://127.0.0.1:9514"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.OpenCart.rule=ClientIP(`0.0.0.0/0`)"
-      - "traefik.http.routers.OpenCart.entrypoints=opencart"
+      - edge
     networks:
       - criblcandidatenetwork
+    restart: unless-stopped
+    logging:
+      driver: syslog
+      options:
+        syslog-address: "udp://127.0.0.1:9514"
+        syslog-facility: "local1"
+        tag: "wordpress"
 
-  minio:
-    image: minio/minio:latest
-    container_name: minio
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: phpmyadmin
+    ports:
+      - "8082:80"
+    environment:
+      - PMA_HOST=mariadb
+      - PMA_PORT=3306
+      - PMA_USER=bn_wordpress
+      - PMA_PASSWORD=${MARIADB_PASSWORD}
+      - PMA_ARBITRARY=1
+    depends_on:
+      - mariadb
+      - edge
+    networks:
+      - criblcandidatenetwork
+    restart: unless-stopped
+    logging:
+      driver: syslog
+      options:
+        syslog-address: "udp://127.0.0.1:9514"
+        syslog-facility: "local2"
+        tag: "phpmyadmin"
+
+  minioserver:
+    image: bitnami/minio:latest
+    container_name: minioserver
+    ports:
+      - "9000:9000"
     expose:
       - 9001
-      - 9002
     environment:
-      - CONSOLE_ACCESS_KEY=${CONSOLE_ACCESS_KEY}
-      - CONSOLE_SECRET_KEY=${CONSOLE_SECRET_KEY}
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
-    command: server --address ":9001" --console-address ":9002" /data
+      - MINIO_SERVER_OPTS=server /data --console-address ":9001"
     volumes:
-      - minio:/data
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.MinIOServer.rule=ClientIP(`0.0.0.0/0`)"
-      - "traefik.http.routers.MinIOServer.entrypoints=minioserver"
-      - "traefik.http.routers.MinIOServer.service=MinIOServer"
-      - "traefik.http.services.MinIOServer.loadbalancer.server.port=9001"
-      - "traefik.http.routers.MinIOConsole.rule=ClientIP(`0.0.0.0/0`)"
-      - "traefik.http.routers.MinIOConsole.entrypoints=minioconsole"
-      - "traefik.http.routers.MinIOConsole.service=MinIOConsole"
-      - "traefik.http.services.MinIOConsole.loadbalancer.server.port=9002"
+      - minio_data:/data
     networks:
       - criblcandidatenetwork
-      
-  podinfo:
-    image: stefanprodan/podinfo:latest
-    container_name: podinfo
-    ports:
-      - "9898:9898"
+    depends_on:
+      - edge
+    restart: unless-stopped
     logging:
-       driver: syslog
-       options:
-         syslog-address: "udp://127.0.0.1:9514"
-    networks:
-      - criblcandidatenetwork
-      
-  traefik:
-    hostname: traefik
-    container_name: traefik
-    image: traefik:latest
-    restart: always
-    command:
-      - "--api.insecure=true"
-      - "--accesslog=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.opencart.address=:8081/tcp"
-      - "--entrypoints.mariadb.address=:3306/tcp"
-      - "--entrypoints.worker.address=:9000/tcp"
-      - "--entrypoints.minioserver.address=:9001/tcp"
-      - "--entrypoints.minioconsole.address=:9002/tcp"
-      - "--entrypoints.edge.address=:9514/udp"
+      driver: syslog
+      options:
+        syslog-address: "udp://127.0.0.1:9514"
+        syslog-facility: "local3"
+        tag: "minioserver"
+
+  minioconsole:
+    image: bitnami/minio:latest
+    container_name: minioconsole
     ports:
-      - "8080:8080"         # Traefik Dashboard
-      - "9000:9000/tcp"     # Worker
-      - "9514:9514/udp"     # Edge
-      - "8081:8081/tcp"     # OpenCart UI
-      - "3306:3306/tcp"     # MariaDB
-      - "9001:9001"         # MinIO Server
-      - "9002:9002"         # MinIO Console
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "9002:9001"
+    environment:
+      - MINIO_SERVER_URL=http://minioserver:9000
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_CONSOLE_ADDRESS=:9001
+    depends_on:
+      - minioserver
+      - edge
     networks:
       - criblcandidatenetwork
+    restart: unless-stopped
+    logging:
+      driver: syslog
+      options:
+        syslog-address: "udp://127.0.0.1:9514"
+        syslog-facility: "local4"
+        tag: "minioconsole"
 
 networks:
   criblcandidatenetwork:
-    name: cribl_candidate_network
 
 volumes:
   edge:
-  worker:
-  minio:
+  mariadb_data:
+  wordpress_data:
+  minio_data:
