@@ -13,6 +13,19 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - edge:/opt/cribl
 
+  worker:
+    image: ubuntu:latest
+    container_name: worker
+    network_mode: host
+    command: ["/bin/bash", "-c", "apt-get update && apt-get install -y curl && exec tail -f /dev/null"]
+    tty: true
+    init: true
+    environment:
+      - CRIBL_VOLUME_DIR=/opt/cribl
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - worker:/opt/cribl
+
   mariadb:
     image: docker.io/bitnami/mariadb:latest
     container_name: mariadb
@@ -150,3 +163,4 @@ volumes:
   mariadb_data:
   wordpress_data:
   minio_data:
+  worker:
