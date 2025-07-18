@@ -108,16 +108,15 @@ services:
         tag: "phpmyadmin"
 
   minioserver:
-    image: bitnami/minio:latest
+    image: docker.io/minio/minio:latest
     container_name: minioserver
+    command: ["server", "/data", "--console-address", ":9001"]
     ports:
       - "9000:9000"
-    expose:
-      - 9001
+      - "9001:9001"
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
-      - MINIO_SERVER_OPTS=server /data --console-address ":9001"
     volumes:
       - minio_data:/data
     networks:
@@ -131,29 +130,6 @@ services:
         syslog-address: "udp://127.0.0.1:9514"
         syslog-facility: "local3"
         tag: "minioserver"
-
-  minioconsole:
-    image: bitnami/minio:latest
-    container_name: minioconsole
-    ports:
-      - "9002:9001"
-    environment:
-      - MINIO_SERVER_URL=http://minioserver:9000
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
-      - MINIO_CONSOLE_ADDRESS=:9001
-    depends_on:
-      - minioserver
-      - edge
-    networks:
-      - criblcandidatenetwork
-    restart: unless-stopped
-    logging:
-      driver: syslog
-      options:
-        syslog-address: "udp://127.0.0.1:9514"
-        syslog-facility: "local4"
-        tag: "minioconsole"
 
 networks:
   criblcandidatenetwork:
